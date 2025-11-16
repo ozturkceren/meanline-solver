@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36623.8 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MeanlineSolver.Console", "MeanlineSolver.Console\MeanlineSolver.Console.csproj", "{FEE962FF-4C84-4A48-ABC2-2E49D5232D85}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MeanlineSolver.Core", "MeanlineSolver.Core\MeanlineSolver.Core.csproj", "{EB153F31-681A-4C90-9DF6-624867D68B09}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FEE962FF-4C84-4A48-ABC2-2E49D5232D85}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FEE962FF-4C84-4A48-ABC2-2E49D5232D85}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FEE962FF-4C84-4A48-ABC2-2E49D5232D85}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FEE962FF-4C84-4A48-ABC2-2E49D5232D85}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EB153F31-681A-4C90-9DF6-624867D68B09}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EB153F31-681A-4C90-9DF6-624867D68B09}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EB153F31-681A-4C90-9DF6-624867D68B09}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EB153F31-681A-4C90-9DF6-624867D68B09}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7EC745B7-4A4D-4ED5-8A1A-330EE9B3CB42}
+	EndGlobalSection
+EndGlobal
