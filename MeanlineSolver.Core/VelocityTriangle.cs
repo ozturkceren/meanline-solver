@@ -1,6 +1,6 @@
 ﻿namespace MeanlineSolver.Core
 {
-    public class Class1
+    public class VelocityTriangle
     {
 
     }
