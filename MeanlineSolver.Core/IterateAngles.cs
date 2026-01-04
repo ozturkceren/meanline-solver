@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace MeanlineSolver.Core
 {
-    internal class IterateAngles
+    public class IterateAngles
     {
     }
 }

@@ -11,4 +11,10 @@
     <ProjectReference Include="..\MeanlineSolver.Core\MeanlineSolver.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="design.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
