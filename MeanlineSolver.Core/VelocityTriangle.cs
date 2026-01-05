@@ -41,13 +41,29 @@ namespace MeanlineSolver.Core
         }
 
         /// <summary>
-        /// Compute tangential velocity Ct from loading coefficient ψ:
-        /// ψ = Δh0/u^2 = (Ct2 - Ct1) / u
-        /// → Ct2 = Ct1 + ψ*u
+        /// Compute rotor-exit tangential velocity Ct2 from loading coefficient ψ.
+        ///
+        /// Simplified (constant mean radius):
+        ///   ψ = Δh0/U^2 and Δh0 = U (Ct2 - Ct1)  => Ct2 = Ct1 + ψ U
+        ///
+        /// Meanline notebook form (allowing rm change):
+        ///   Ct2 = ψ U2 + (rm1/rm2) Ct1
         /// </summary>
         public static double ComputeCt2(double Ct1, double psi, double U)
         {
             return Ct1 + psi * U;
+        }
+
+        /// <summary>
+        /// Compute Ct2 with mean-radius change correction:
+        /// Ct2 = ψ U2 + (rm1/rm2) Ct1
+        /// </summary>
+        public static double ComputeCt2(double Ct1, double psi, double U2, double rm1, double rm2)
+        {
+            if (rm2 == 0.0)
+                throw new ArgumentException("rm2 cannot be zero.", nameof(rm2));
+
+            return psi * U2 + (rm1 / rm2) * Ct1;
         }
 
         /// <summary>
@@ -66,6 +82,14 @@ namespace MeanlineSolver.Core
         public static double ComputeDeltaH0(double U, double Ct2, double Ct1)
         {
             return U * (Ct2 - Ct1);
+        }
+
+        /// <summary>
+        /// General Euler work: Δh0 = U2*Ct2 - U1*Ct1
+        /// </summary>
+        public static double ComputeDeltaH0(double U1, double U2, double Ct1, double Ct2)
+        {
+            return U2 * Ct2 - U1 * Ct1;
         }
 
         /// <summary>

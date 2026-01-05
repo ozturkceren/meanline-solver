@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+
 namespace MeanlineSolver.Core
 {
     public class StageInput
@@ -23,7 +24,18 @@ namespace MeanlineSolver.Core
         public double Solidity { get; set; }            // σ = c/s
         public double ThicknessChordRatio { get; set; } // t/c
 
-        // Inlet flow conditions (optional swirl)
-        public double InletFlowAngle { get; set; }      // α1, default = 0
+        // Inlet/exit flow conditions (optional swirl)
+
+        /// <summary>
+        /// Inlet absolute flow angle α1 in degrees (positive in direction of rotor rotation).
+        /// If omitted in JSON, it defaults to 0.
+        /// </summary>
+        public double InletFlowAngle { get; set; }      // α1 [deg]
+
+        /// <summary>
+        /// Stator exit absolute flow angle α3 in degrees.
+        /// If omitted in JSON, it defaults to 0.
+        /// </summary>
+        public double StatorExitFlowAngle { get; set; } // α3 [deg]
     }
 }
