@@ -3,145 +3,88 @@
 namespace MeanlineSolver.Core
 {
     /// <summary>
-    /// Empirical correlations for incidence, deviation and losses.
-    /// NOTE: These are simplified placeholder models.
-    /// You can later replace them with detailed correlations from the PDF.
+    /// Correlation layer constrained to the INPUT list shown in the source screenshot.
+    /// The exact report correlations are not visible in the image,
+    /// so mappings below are deterministic and only use provided inputs.
     /// </summary>
     public static class EmpiricalModels
     {
-        // -----------------------------
-        // INCIDENCE ANGLE (i)
-        // -----------------------------
-        //
-        // Very simple model:
-        // i = K_inc * (phi - phi_opt)
-        // where phi_opt depends weakly on reaction and solidity.
-        //
-        public static double ComputeIncidence(
-            double flowCoefficient,   // φ
-            double reaction,          // Λ
-            double solidity)          // σ
+        // DF -> solidity mapping (deterministic)
+        public static double ComputeSolidityFromDiffusionFactor(double diffusionFactor)
         {
-            // "Optimum" flow coefficient (very rough guess)
-            double phiOpt = 0.5 + 0.1 * (reaction - 0.5); // around 0.5 for Λ=0.5
-            double Kinc = 5.0 * Math.PI / 180.0;          // 5 deg per unit φ difference
-
-            double i = Kinc * (flowCoefficient - phiOpt);
-
-            return i; // radians
+            double df = Clamp(diffusionFactor, 0.2, 0.7);
+            double sigma = 0.8 + (df - 0.2) * (2.0 - 0.8) / (0.7 - 0.2);
+            return Clamp(sigma, 0.6, 2.2);
         }
 
-        // -----------------------------
-        // DEVIATION ANGLE (δ)
-        // -----------------------------
-        //
-        // Simple Lieblein-like trend:
-        // δ ∝ (t/c) / σ  (more thickness and less solidity → more deviation)
-        //
-        public static double ComputeDeviation(
-            double thicknessChordRatio,  // t/c
-            double solidity)             // σ
+        // i* (rad)
+        // 3-arg overload (IterateAngles.cs bunu çağırıyor)
+        public static double ComputeIncidence(double phi, double reactionTarget, double solidity)
         {
-            // Base deviation ~ 4 deg for typical σ and t/c
-            double baseDeg = 4.0;
+            // Sadece INPUT listesindeki büyüklükleri kullanır:
+            // phi (Inlet Flow Coefficient), reactionTarget (Stage Reactions), solidity (Solidity output/iter)
+            // Deterministik, bounded bir korelasyon (defter mantığıyla "i* hesapla" adımını sağlar)
 
-            double factor = (thicknessChordRatio / 0.06) * (1.2 / solidity);
-            double deltaDeg = baseDeg * factor;
+            double ph = Clamp(phi, 0.2, 0.9);
+            double r = Clamp(reactionTarget, 0.2, 0.8);
+            double s = Clamp(solidity, 0.5, 2.5);
 
-            return deltaDeg * Math.PI / 180.0; // radians
+            // Basit ama stabil bir model:
+            // phi ↑ => incidence biraz artar
+            // reaction ↑ => incidence biraz azalır (tipik tasarım trendi)
+            // solidity ↑ => incidence biraz azalır (daha yüksek σ genelde daha toleranslı)
+            double deg =
+                6.0 * (ph - 0.5)
+              - 5.0 * (r - 0.5)
+              - 2.0 * (s - 1.0);
+
+            deg = Clamp(deg, -6.0, 6.0);
+            return deg * Math.PI / 180.0;
         }
 
-        // -----------------------------
-        // PROFILE LOSS COEFFICIENT (Y_p)
-        // -----------------------------
-        //
-        // Very simplified profile loss:
-        // Y_p ∝ (t/c) * (1/σ)
-        //
-        public static double ComputeProfileLoss(
-            double thicknessChordRatio,  // t/c
-            double solidity)             // σ
+        // δ* (rad)
+        public static double ComputeDeviation(double diffusionFactor, double thicknessChordRatio)
         {
-            // base profile loss at design conditions
-            double baseLoss = 0.03; // typical 3% total pressure loss
+            double df = Clamp(diffusionFactor, 0.2, 0.7);
+            double tc = Clamp(thicknessChordRatio, 0.02, 0.12);
 
-            double factor = (thicknessChordRatio / 0.06) * (1.2 / solidity);
-
-            return baseLoss * factor;  // dimensionless loss coefficient
+            double deg = 2.0 + 12.0 * (df - 0.3) + 25.0 * (tc - 0.06);
+            deg = Clamp(deg, 0.0, 12.0);
+            return deg * Math.PI / 180.0;
         }
 
-        // -----------------------------
-        // SECONDARY LOSS (Y_s)
-        // -----------------------------
-        //
-        // Very rough model:
-        // Y_s ∝ (1 - hubTipRatio)
-        //
-        public static double ComputeSecondaryLoss(double hubTipRatio)
+        // Rotor loss Y (bounded)
+        public static double ComputeLossY_Rotor(double diffusionFactor, double thicknessChordRatio, double tipClearance, double bladeHeight)
         {
-            double baseLoss = 0.01; // 1% at typical aspect
-            double factor = (1.0 - hubTipRatio) / 0.2; // more span → more secondary loss
+            double df = Clamp(diffusionFactor, 0.0, 0.95);
+            double tc = Clamp(thicknessChordRatio, 0.0, 0.2);
+            double clr = (bladeHeight > 1e-9) ? Clamp(tipClearance / bladeHeight, 0.0, 0.2) : 0.0;
 
-            return baseLoss * Math.Max(factor, 0.0);
+            double y = 0.06 + 0.18 * df + 0.25 * tc + 0.30 * clr;
+            return Clamp(y, 0.0, 0.35);
         }
 
-        // -----------------------------
-        // TIP CLEARANCE LOSS (Y_c)
-        // -----------------------------
-        //
-        // Y_c ∝ (clearance / bladeHeight)
-        //
-        public static double ComputeClearanceLoss(
-            double tipClearance,  // absolute clearance
-            double bladeHeight)   // span at tip
+        // Stator loss Y (bounded)
+        public static double ComputeLossY_Stator(double diffusionFactor, double thicknessChordRatio)
         {
-            if (bladeHeight <= 0.0)
-                return 0.0;
-
-            double clearanceRatio = tipClearance / bladeHeight;
-
-            double baseLoss = 0.015; // 1.5% for typical clearance
-            double factor = clearanceRatio / 0.01; // 1% span as reference
-
-            return baseLoss * factor;
+            double df = Clamp(diffusionFactor, 0.0, 0.95);
+            double tc = Clamp(thicknessChordRatio, 0.0, 0.2);
+            double y = 0.05 + 0.20 * df + 0.22 * tc;
+            return Clamp(y, 0.0, 0.30);
         }
 
-        // -----------------------------
-        // TOTAL LOSS COEFFICIENT (Y_total)
-        // -----------------------------
-        //
-        // Simple sum of components:
-        //
-        public static double ComputeTotalLoss(
-            double thicknessChordRatio,
-            double solidity,
-            double hubTipRatio,
-            double tipClearance,
-            double bladeHeight)
+        // Δs = -R ln(1 - Y)
+        public static double ComputeEntropyRiseFromY(double lossY)
         {
-            double Yp = ComputeProfileLoss(thicknessChordRatio, solidity);
-            double Ys = ComputeSecondaryLoss(hubTipRatio);
-            double Yc = ComputeClearanceLoss(tipClearance, bladeHeight);
-
-            return Yp + Ys + Yc;
+            double y = Clamp(lossY, 0.0, 0.95);
+            return -FlowProperties.R * Math.Log(Math.Max(1.0 - y, 1e-12));
         }
 
-        // -----------------------------
-        // SIMPLE EFFICIENCY FROM LOSS
-        // -----------------------------
-        //
-        // Very rough link between loss coefficient and efficiency.
-        //
-        public static double EstimateEfficiencyFromLoss(double totalLoss)
+        private static double Clamp(double x, double lo, double hi)
         {
-            // Assume loss coefficient around 0.05 → efficiency ~ 0.9
-            double eff = 1.0 - 0.5 * totalLoss;
-
-            // clamp
-            if (eff > 0.99) eff = 0.99;
-            if (eff < 0.70) eff = 0.70;
-
-            return eff;
+            if (x < lo) return lo;
+            if (x > hi) return hi;
+            return x;
         }
     }
 }

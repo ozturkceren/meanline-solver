@@ -1,33 +1,20 @@
 {
-  "CompressorType": "Axial",
-  "MassFlowRate": 25.0,
-  "PressureRatio": 15.0,
-  "RotationalSpeed": 9000,
-  "AspectRatio": 1.5,
-  "TipClearance": 0.002,
-  "TipRadius": 0.45,
-
-  "ThicknessChordRatio": 0.05,
-  "BlockageFactor": 0.97,
+  "CompressorType": "Compressor",
+  "MassFlowRate": 20.0,
+  "NumberOfStages": 1,
+  "PressureRatio": 1.30,
+  "RotationalSpeed": 14000,
+  "AspectRatio": 2.0,
+  "StageReactions": [0.50],
+  "StageLoadDistribution": [1.0],
+  "TipClearance": 0.001,
+  "ThicknessChordRatio": 0.06,
+  "BlockageFactor": 0.98,
   "DiffusionFactor": 0.45,
-  "AxialVelocityRatio": 0.5,
-  "InletFlowAngle": 0,
+  "AxialVelocityRatio": 1.0,
+  "InletFlowAngle": 0.0,
   "InletFlowCoefficient": 0.55,
-  "InletHubTipRatio": 0.8,
-  "InletTotalTemperature": 288,
-  "InletTotalPressure": 101325,
-
-  "Stages": [
-    {
-      "Reaction": 0.5,
-      "FlowCoefficient": 0.45,
-      "LoadingCoefficient": 0.35,
-      "HubTipRatio": 0.92,
-      "AxialVelocityRatioRotor": 1.00,
-      "AxialVelocityRatioStator": 1.00,
-      "Solidity": 1.3,
-      "ThicknessChordRatio": 0.06,
-      "InletFlowAngle": 0
-    }
-  ]
+  "InletHubTipRatio": 0.80,
+  "InletTotalTemperature": 288.0,
+  "InletTotalPressure": 101325.0
 }
