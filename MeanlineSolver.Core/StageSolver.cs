@@ -7,11 +7,24 @@ namespace MeanlineSolver.Core
         private const int InletMaxIter = 60;
         private const int GeoMaxIter = 60;
 
-        public StageResult SolveSingleStage(StageInput stg, MeanlineInputs g, double T01, double P01)
+        /// <summary>
+        /// Solves a single stage for given (psi, alpha3) guesses.
+        /// ReactionCalculated is returned via out parameter to support the outer reaction loop.
+        /// </summary>
+        public StageResult SolveSingleStage(
+            StageInput stg,
+            MeanlineInputs g,
+            double T01,
+            double P01,
+            out double reactionCalculated)
         {
             var s1 = ComputeStation1(stg, g, T01, P01);
             var s2 = ComputeStation2(stg, g, s1);
-            var s3 = ComputeStation3(stg, g, s2);
+            var s3 = ComputeStation3(stg, g, s2); // NOTE: uses stg.StatorExitFlowAngleDeg
+
+            // Stage Reaction (defter/kaynak tanımı)
+            // R = (h2 - h1) / (h3 - h1)
+            reactionCalculated = (s2.H - s1.H) / (s3.H - s1.H);
 
             double PR_stage = s3.P0 / s1.P0;
             double deltaH0 = s2.H0 - s1.H0;
@@ -26,7 +39,7 @@ namespace MeanlineSolver.Core
 
                 DeltaH0 = deltaH0,
                 PressureRatio = PR_stage,
-                Efficiency = 1.0, // PR already computed from losses/entropy
+                Efficiency = 1.0,
 
                 FlowCoefficient = stg.FlowCoefficient,
                 LoadingCoefficient = stg.LoadingCoefficient,
@@ -57,7 +70,8 @@ namespace MeanlineSolver.Core
             double ht = stg.HubTipRatio;
             double alpha1 = stg.InletFlowAngleDeg * Math.PI / 180.0;
 
-            double rm = 0.25; // just an initial guess
+            // Initial guess for rm1 (not an input; purely numerical start)
+            double rm = 0.25;
 
             StationState s = new StationState { T0 = T01, P0 = P01 };
 
@@ -74,10 +88,10 @@ namespace MeanlineSolver.Core
 
                 double A = g.MassFlowRate / (rho * Ca * g.BlockageFactor);
 
-                // A = 4π rm^2 (1-ht)/(1+ht)
+                // A = 4π rm^2 (1-ht)/(1+ht)  from rh/rt fixed
                 double rm_new = Math.Sqrt(A * (1.0 + ht) / (4.0 * Math.PI * (1.0 - ht)));
 
-                if (Math.Abs(rm_new - rm) / Math.Max(rm, 1e-9) < 1e-9)
+                if (Math.Abs(rm_new - rm) / Math.Max(rm, 1e-12) < 1e-9)
                 {
                     rm = rm_new;
                     FillStationGeometry(ref s, rm, ht, A);
@@ -88,7 +102,7 @@ namespace MeanlineSolver.Core
                 rm = 0.5 * (rm + rm_new);
             }
 
-            // fallback
+            // fallback (should rarely happen)
             double U_last = omega * rm;
             double Ca_last = stg.FlowCoefficient * U_last;
             double Ct_last = Ca_last * Math.Tan(alpha1);
@@ -112,16 +126,16 @@ namespace MeanlineSolver.Core
             double ht = stg.HubTipRatio;
 
             double rm2 = s1.Radius;
-            double s2_static = s1.S;
 
             for (int iter = 0; iter < GeoMaxIter; iter++)
             {
                 double U1 = s1.U;
                 double U2 = omega * rm2;
 
+                // Ca2 = Ca1 * AVR
                 double Ca2 = stg.AxialVelocityRatio * s1.Ca;
 
-                // Ct2 = ψ U2 + (rm1/rm2) Ct1
+                // Ct2 = ψ U2 + (rm1/rm2) Ct1   (defter formülü)
                 double Ct2 = stg.LoadingCoefficient * U2 + (s1.Radius / rm2) * s1.Ct;
 
                 double C2 = Math.Sqrt(Ca2 * Ca2 + Ct2 * Ct2);
@@ -134,35 +148,42 @@ namespace MeanlineSolver.Core
                 // Rothalpy I = h01 - U1 Ct1
                 double I = s1.H0 - U1 * s1.Ct;
 
-                // h2 = I - W2^2/2 + U2^2/2
+                // h2 = I - W2^2/2 + U2^2/2   (defter formülü)
                 double h2 = I - 0.5 * W2 * W2 + 0.5 * U2 * U2;
                 double T2 = h2 / FlowProperties.Cp;
 
+                // totals
                 double h02 = h2 + 0.5 * C2 * C2;
                 double T02 = h02 / FlowProperties.Cp;
 
-                // provisional height for clearance loss normalization
+                // For clearance-normalized loss (height estimate)
                 double P2_iso = s1.P0 * Math.Pow(T2 / s1.T0, FlowProperties.Gamma / (FlowProperties.Gamma - 1.0));
                 double rho2_iso = FlowProperties.ComputeDensity(P2_iso, T2);
                 double A2_iso = g.MassFlowRate / (rho2_iso * Ca2 * g.BlockageFactor);
                 double h2_geo_iso = A2_iso / (2.0 * Math.PI * rm2);
 
-                double Yrot = EmpiricalModels.ComputeLossY_Rotor(g.DiffusionFactor, g.ThicknessChordRatio, g.TipClearance, h2_geo_iso);
-                double dS12 = EmpiricalModels.ComputeEntropyRiseFromY(Yrot);
-                s2_static = s1.S + dS12;
+                double Yrot = EmpiricalModels.ComputeLossY_Rotor(
+                    g.DiffusionFactor, g.ThicknessChordRatio, g.TipClearance, h2_geo_iso);
 
+                // Δs1-2 = -R ln(1 - Y)
+                double dS12 = EmpiricalModels.ComputeEntropyRiseFromY(Yrot);
+                double s2_static = s1.S + dS12;
+
+                // P2 from (T2, s2)
                 double P2 = FlowProperties.ComputePressureFromEntropy(T2, s2_static);
                 double rho2 = FlowProperties.ComputeDensity(P2, T2);
 
+                // A2 and rm2 update (hub-tip fixed)
                 double A2 = g.MassFlowRate / (rho2 * Ca2 * g.BlockageFactor);
                 double rm2_new = Math.Sqrt(A2 * (1.0 + ht) / (4.0 * Math.PI * (1.0 - ht)));
 
-                if (Math.Abs(rm2_new - rm2) / Math.Max(rm2, 1e-9) < 1e-9)
+                if (Math.Abs(rm2_new - rm2) / Math.Max(rm2, 1e-12) < 1e-9)
                 {
                     var s2 = new StationState();
                     FillStationGeometry(ref s2, rm2_new, ht, A2);
 
                     s2.U = U2;
+
                     s2.Ca = Ca2;
                     s2.Ct = Ct2;
                     s2.C = C2;
@@ -194,57 +215,70 @@ namespace MeanlineSolver.Core
                 rm2 = 0.5 * (rm2 + rm2_new);
             }
 
-            // fallback minimal
             return new StationState { Radius = rm2 };
         }
 
         // =========================
-        // STATION 3 : Stator Exit
+        // STATION 3 : Stator Exit (ALPHA3 IS THE OUTER VARIABLE)
         // =========================
         private StationState ComputeStation3(StageInput stg, MeanlineInputs g, StationState s2)
         {
             double ht = stg.HubTipRatio;
             double rm3 = s2.Radius;
 
+            // alpha3 is NOT derived from reaction (per Figure 2.2)
+            double alpha3 = stg.StatorExitFlowAngleDeg * Math.PI / 180.0;
+
             for (int iter = 0; iter < GeoMaxIter; iter++)
             {
-                double U = s2.U;
+                // Ca3 = Ca2 * AVR  (defterde station3 için benzer form)
                 double Ca3 = stg.AxialVelocityRatio * s2.Ca;
 
-                // Reaction constraint (deterministic):
-                // R = 1 - (Ct2 + Ct3)/(2U) -> Ct3 = 2U(1-R) - Ct2
-                double Ct3 = 2.0 * U * (1.0 - stg.Reaction) - s2.Ct;
-                double alpha3 = Math.Atan2(Ct3, Ca3);
+                // Ct3 = Ca3 tan(alpha3)   (defter formülü)
+                double Ct3 = Ca3 * Math.Tan(alpha3);
                 double C3 = Math.Sqrt(Ca3 * Ca3 + Ct3 * Ct3);
 
-                // h03 = h02
+                // Stator: h03 = h02  (no work)
                 double h03 = s2.H0;
                 double T03 = h03 / FlowProperties.Cp;
 
+                // h3 = h03 - C3^2/2
                 double h3 = h03 - 0.5 * C3 * C3;
                 double T3 = h3 / FlowProperties.Cp;
 
+                // Stator loss -> Δs2-3 = -R ln(1-Y)
                 double Yst = EmpiricalModels.ComputeLossY_Stator(g.DiffusionFactor, g.ThicknessChordRatio);
                 double dS23 = EmpiricalModels.ComputeEntropyRiseFromY(Yst);
+
                 double s3_static = s2.S + dS23;
 
+                // P3 from (T3,s3)
                 double P3 = FlowProperties.ComputePressureFromEntropy(T3, s3_static);
                 double rho3 = FlowProperties.ComputeDensity(P3, T3);
 
+                // A3 and rm3 update (hub-tip fixed)
                 double A3 = g.MassFlowRate / (rho3 * Ca3 * g.BlockageFactor);
                 double rm3_new = Math.Sqrt(A3 * (1.0 + ht) / (4.0 * Math.PI * (1.0 - ht)));
 
-                if (Math.Abs(rm3_new - rm3) / Math.Max(rm3, 1e-9) < 1e-9)
+                if (Math.Abs(rm3_new - rm3) / Math.Max(rm3, 1e-12) < 1e-9)
                 {
                     var s3 = new StationState();
                     FillStationGeometry(ref s3, rm3_new, ht, A3);
 
-                    s3.U = U;
+                    // Kinematics
+                    s3.U = s2.U; // stator: same mean radius speed reference
+
                     s3.Ca = Ca3;
                     s3.Ct = Ct3;
                     s3.C = C3;
                     s3.Alpha = alpha3;
 
+                    s3.Wa = Ca3;
+                    s3.Wt = s3.U - Ct3;
+                    s3.W = Math.Sqrt(s3.Wa * s3.Wa + s3.Wt * s3.Wt);
+                    s3.Beta = Math.Atan2(s3.Wt, s3.Wa);
+
+                    // Thermo
                     s3.T = T3;
                     s3.P = P3;
                     s3.Rho = rho3;
@@ -254,6 +288,7 @@ namespace MeanlineSolver.Core
                     s3.H0 = h03;
                     s3.T0 = T03;
                     s3.P0 = FlowProperties.ComputeTotalPressure(P3, T3, T03);
+
                     s3.Mach = FlowProperties.ComputeMach(C3, T3);
                     return s3;
                 }
@@ -268,7 +303,10 @@ namespace MeanlineSolver.Core
         {
             double sigma = EmpiricalModels.ComputeSolidityFromDiffusionFactor(g.DiffusionFactor);
 
-            double i = EmpiricalModels.ComputeIncidence(g.DiffusionFactor, stg.Reaction, sigma);
+            // IMPORTANT: incidence uses (phi, reaction, solidity) - defter mantığı
+            double phi = stg.FlowCoefficient;
+            double i = EmpiricalModels.ComputeIncidence(phi, stg.Reaction, sigma);
+
             double d = EmpiricalModels.ComputeDeviation(g.DiffusionFactor, g.ThicknessChordRatio);
 
             double beta1_metal = s1.Beta - i;
@@ -277,8 +315,8 @@ namespace MeanlineSolver.Core
             double alpha2_metal = s2.Alpha - i;
             double alpha3_metal = s3.Alpha + d;
 
-            double chordRotor = s1.Height / Math.Max(g.AspectRatio, 1e-9);
-            double chordStator = s2.Height / Math.Max(g.AspectRatio, 1e-9);
+            double chordRotor = s1.Height / Math.Max(g.AspectRatio, 1e-12);
+            double chordStator = s2.Height / Math.Max(g.AspectRatio, 1e-12);
 
             double camberRotor = beta1_metal - beta2_metal;
             double camberStator = alpha2_metal - alpha3_metal;
